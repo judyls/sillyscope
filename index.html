@@ -289,6 +289,16 @@ For our design, we chose to push as much of the oscilloscope functionality to th
                 </div>
             </div>
         </div>
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12">
+                    <img src="img/trigger_fsm.png" style="padding-bottom:20px;" class="col-lg-8 col-lg-offset-2" alt="Trigger FSM">
+                </div>
+            </div>
+            <div class="row text-center">
+                <p style="padding-bottom:50px;">Figure 2: FSM for trigger.v</p>
+            </div>
+        </div>
 
         <div class="container">
             <div class="row">
@@ -297,6 +307,56 @@ For our design, we chose to push as much of the oscilloscope functionality to th
                     <hr>
                     <p>
                         The VGA writer was responsible for pulling data from the sample buffer, and writing that display into the VGA framebuffer. The VGA writer received a “go” signal from the trigger module, to indicate that new data was available and the screen should be redrawn. Additionally while drawing the screen, the VGA writer drew a grid in the background. The VGA writer had two main interfaces -- one to access the sample buffer, using an EBAB, and the other directly connected to the framebuffer SRAM. The was also an idle signal, used to prevent the trigger module from modifying the sample buffer in the middle of a screen draw, which would produce visible discontinuities in the output.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12">
+                    <img src="img/vga_fsm.png" style="padding-bottom:20px;" class="col-lg-8 col-lg-offset-2" alt="VGA FSM">
+                </div>
+            </div>
+            <div class="row text-center">
+                <p style="padding-bottom:50px;">Figure 3: FSM for vga_writer.v</p>
+            </div>
+        </div>
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12  text-left">
+                    <p>
+                        The VGA writer was implemented using a fairly straightforward state machine. The module initialized in the WAIT state, which just waits until the trigger module gives the go signal to start a redraw. After being signalled to start, drawing begins drawing the leftmost column moves into the FETCH state. In the FETCH state, the module reads the values in the currently active column for all 4 channels and the math channel out of the sample buffer. Since this data is tightly packed into a single 64-bit word in the sample buffer, fetching a column’s data is accomplished with a single read operation.
+                    </p>
+                    <p>
+                        After the sample buffer responds with the data, the FSM moves on to the PROCESS state, which preprocesses the data for display. In the PROCESS state, each channel’s sample value gets scaled and offset by the configuration parameters for that channel, converting the 12-bit sample to a signed 11-bit y-coordinate on the screen. 11 bits are used instead of the 9 required for the 480 rows on the screen because it allows the module to deal with points which are offscreen in a simple manner. Additionally, the y-coordinate of the point in the column directly to the left is saved, to allow drawing a continuous line between the two points.
+                    </p>
+                    <p>
+                        After the preprocessing cycle, the FSM enters the DRAW state, which iterates through an entire column and writes the color for each pixel to the framebuffer. The FSM remains in the DRAW state until it finishes a column, at which point it goes to FETCH or WAIT, depending on whether or not there are more columns remaining. Pixel color is determined by a set of prioritized rules which are based on the current x- and y-coordinate being drawn. Channels take the highest priority -- if the current y-coordinate is anywhere between the current and previous y-coordinates for the channel, the pixel gets drawn with that channel’s color. This makes the lines drawn on the screen continuous, and deals with edge cases such as square waves well, which generally jump very quickly from their low to high values. The signedness of the y-coordinates also allows this logic to correctly handle all cases where the current sample is off the screen. If no channel should be drawn on the current pixel, then the writer checks if the pixel is on one of the gridlines, and draws the pixel gray if it is. Otherwise, the black background is drawn.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12  text-left">
+                    <h3 class="text-center">Qsys Setup</h3>
+                    <hr>
+                    <p>
+                        For our project, we heavily modified the existing Qsys designs for the main memory system, as well as the VGA controller. The Qsys layout was split into two major clock domains, called sys_clk and logic_clk. sys_clk was a 100 MHz clock used for the HPS’s bus interfaces as well as the VGA subsystem. logic_clk was a 50 MHz clock used for most of our custom logic, and was used as the clock source for the ports of the onchip SRAMs which faced our logic.
+                    </p>
+                    <p>
+                        Our Qsys design contained a few different memories. There were two on-chip SRAMs which were used to store intermediate data for the oscilloscope. One was an 8 kB SRAM for the sample buffer, which stored samples captured by the trigger module for later display to the screen. The other SRAM was 307 kB, and stored the VGA subsystem. Both of these SRAMs were connected into our logic, and the VGA subsystem also had a connection to pull pixels out from from framebuffer SRAM. There was also an off-chip SDRAM which stored a second framebuffer, referred to as the overlay buffer. The overlay buffer was much larger than the on-chip framebuffer, because it supported full 32-bit color with transparency. This buffer was connected to both the HPS and the VGA subsystem, to allow the HPS to draw over the waveforms.
+                    </p>
+                    <p>
+                        The HPS’ memory buses were connected into most of the major components, to allow for debugging, configuration, and displaying data. The two main uses of the HPS’ buses interacting with the PIO module driving our configuration bus, and writing pixel data to the off-chip SDRAM. The HPS was also connected to the SRAM for storing the sample buffer, but was not connected at all to the SRAM for the VGA framebuffer.
+                    </p>
+                    <p>
+                        The VGA subsystem was built to read from two different framebuffers, blend them, and write the blended pixels to the screen. It contained two DMA engines which fetched the pixels from the two buffers and wrote them into a FIFO. Both pixel streams were then resampled into a 10-bit per color channel RGB format, along with a 10-bit alpha term to control transparency of the overlay buffer’s pixels. These two streams were then alpha-blended into the final output color and pushed into a final output FIFO. The final VGA controller then sent the pixels from this FIFO out to the screen over VGA. This design allowed the HPS to create very flexible UI overlays on the screen, without interfering with the oscilloscope operations on the FPGA at all.
+                    </p>
+                    <p>
+                        While implementing the VGA subsystem, we ran into a problem with the HPS trying to rapidly draw to the screen. In our first implementation, the HPS would temporarily disrupt the VGA output while writing to the SDRAM, though the output would stabilize once the write finished. If the HPS wrote to the entire overlay buffer at once, it would cause a very noticeable disruption in the image on the screen for a moment. To resolve this, we wanted to change the arbitration priorities on the SDRAM controller such that the video DMA would have higher priority than the HPS, effectively preventing the HPS from interfering with a video DMA read. When we tried to modify the priorities, however, we found out that Qsys does not support setting arbitration priorities when the bus is connected to a DMA master. To resolve this, we inserted an Avalon-MM Pipeline Bridge between the video DMA engine and the SDRAM. Qsys allowed us to set the arbitration priority for this bridge, which resolved all of the issues with the HPS disrupting the VGA output. Using this fix, we were able to continuously write to the overlay buffer from the HPS without breaking the VGA output at all.
+
                     </p>
                 </div>
             </div>
@@ -349,11 +409,34 @@ For our design, we chose to push as much of the oscilloscope functionality to th
     <section id="results">
         <div class="container">
             <div class="row">
-                <div class="col-lg-8 col-lg-offset-2 text-center">
+                <div class="col-lg-12 text-center">
                     <h2 class="section-heading">Results</h2>
                     <hr class="light">
-                    <p>Start Bootstrap has everything you need to get your new website up and running in no time! All of the templates and themes on Start Bootstrap are open source, free to download, and easy to use. No strings attached!</p>
+                    <p>
+                        We successfully completed the project by having a 4 channel oscilloscope with a good UI. Figure X2 below shows a picture of the screen when all four channels are used. Each channel has a different color which makes it easy to differentiate. The top right hand corner displays the channel and trigger status. The bottom of the screen displays the time/div and volts/div for each channel. If math mode is enabled, the bottom right hand corner will display the math mode along with the associated channels.
+                    </p>
+                    <p>
+                        We prioritized a clean and colorful user interface which allowed users to control parameters with ease. Thus we created a C program to be run on the HPS side where users can type in commands to adjust parameters. The demo video can be seen on youtube.
+                    </p>
+                    <p>
+                        In the end we had a very responsive oscilloscope. The screen did not flicker at all and it was able to trigger properly on the specified channel. The HPS overlay of channel information on the screen was essential for a good user interface. The configuration commands from HPS were also performed quickly so the screen was able to update without delay. New users should be able to quickly use the SillyScope because of the clean and understandable UI. The commands are also straight-forward to understand and short which helps users to quickly configure the parameters.
+                    </p>
+                    <p>
+                        The project did not pose any safety threats to the team members. We had to make sure the FPGA was safe against high voltages especially on the ADC pins. We systematically chose wire colors to make it easier to debug the connections and ensure that nothing was shorted. We did not have any interference with other team’s designs. However, it was interesting to see the capacitive coupling on the channels when one of the channels were not connected but it was still displayed on the screen.
+                    </p>
                 </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12">
+                    <img src="img/ss1.jpg" style="padding-bottom:20px;" class="col-lg-8 col-lg-offset-2" alt="VGA FSM">
+                </div>
+            </div>
+            <div class="row text-center">
+                <p style="padding-bottom:50px;">Figure 4: SillyScope when all four channels are used. It displays the triggering channel in top right corner. The time/div and volts/div for each channel is displayed in the bottom of the screen.
+</p>
             </div>
         </div>
 
@@ -466,9 +549,12 @@ For our design, we chose to push as much of the oscilloscope functionality to th
             <div class="row">
                 <div class="col-lg-12 text-center">
                     <p>
-                        DUMMY TEXT  CONCLUSIONcfg bus signals match the register’s ID, the register then stores the lower 24 bits itself. Using this interface, the HPS pushes new settings to the FPGA when the user makes a change to the oscilloscope configuration. Table X provides a list of all configuration registers used in the design.
+The project met our expectations in terms of final functionality and UI. We were able to support multiple channels and had an appealing design. The commands were intuitive so it is easy for new users to use while also allowing them to configure a lot of parameters. We had originally thought of including a logic analyzer but it was more interesting for us to build a more user friendly environment. In the future, we could look into scaling the number of supported channels to eight which is the maximum number of pins connected to ADC.
                     </p>
 
+                    <p>
+                        We started the project with Altera University Program for complete computer system which included major components like video out and audio. However we changed the program dramatically by deleting all the components that we did not need. This allowed us to have cleaner code and to make debugging easier.
+                    </p>
                 </div>
             </div>
         </div>
