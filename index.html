@@ -31,6 +31,23 @@
         <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
         <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
     <![endif]-->
+    <style>
+    table {
+    font-family: arial, sans-serif;
+    border-collapse: collapse;
+    width: 100%;
+}
+
+td, th {
+    border: 1px solid #dddddd;
+    text-align: left;
+    padding: 8px;
+}
+
+tr:nth-child(even) {
+    background-color: #dddddd;
+}
+    </style>
 
 </head>
 
@@ -202,7 +219,146 @@
                     <p>
 For our design, we chose to push as much of the oscilloscope functionality to the FPGA as possible, with the HPS responsible for configuring the FPGA with the various oscilloscope parameters. All communication from the HPS to the FPGA was done using a simple interface we called the cfg bus. The cfg bus provides a simple write-only method for sending configuration from the HPS to the FPGA. The output of a single HPS-connected 32-bit Peripheral I/O (PIO) module is connected to every configurable module in our design. A number of configuration registers are connected to this bus, each with a register ID. When the upper 8 bits of the cfg bus signals match the register’s ID, the register then stores the lower 24 bits itself. Using this interface, the HPS pushes new settings to the FPGA when the user makes a change to the oscilloscope configuration. Table 1 provides a list of all configuration registers used in the design.
                     </p>
-                    <h1 class="text-center">TABLE 1</h1>
+                    <p>
+                        <table style="width:100%">
+                              <tr>
+                                <th>ID</th>
+                                <th>Purpose</th>
+                                <th>Default Value</th>
+                              </tr>
+                              <tr>
+                                <td>1</td>
+                                <td>Timescale Counter Limit</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>3</td>
+                                <td>Math Waveform Enable</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>4</td>
+                                <td>Number of Active Channels (0-Indexed)</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>5</td>
+                                <td>Triggering Mode</td>
+                                <td>0 (Rising)</td>
+                              </tr>
+                              <tr>
+                                <td>6</td>
+                                <td>Triggering Enable</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>7</td>
+                                <td>Triggering Level</td>
+                                <td>0x800 (50%)</td>
+                              </tr>
+                              <tr>
+                                <td>8</td>
+                                <td>Triggering Pulse Width</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>9</td>
+                                <td>Triggering Source Channel</td>
+                                <td>0 (CH0)</td>
+                              </tr>
+                              <tr>
+                                <td>10</td>
+                                <td>CHO Vertical Scale Factor</td>
+                                <td>4</td>
+                              </tr>
+                              <tr>
+                                <td>11</td>
+                                <td>CH0 Vertical Offset</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>12</td>
+                                <td>CH1 Vertical Scale Factor</td>
+                                <td>4</td>
+                              </tr>
+                              <tr>
+                                <td>13</td>
+                                <td>CH1 Vertical Offset</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>14</td>
+                                <td>CH2 Vertical Scale Factor</td>
+                                <td>4</td>
+                              </tr>
+                              <tr>
+                                <td>15</td>
+                                <td>CH2 Vertical Offset</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>16</td>
+                                <td>CH3 Vertical Scale Factor</td>
+                                <td>4</td>
+                              </tr>
+                              <tr>
+                                <td>17</td>
+                                <td>CH3 Vertical Offset</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>18</td>
+                                <td>Math Vertical Scale Factor</td>
+                                <td>4</td>
+                              </tr>
+                              <tr>
+                                <td>19</td>
+                                <td>Math Vertical Offset</td>
+                                <td>0</td>
+                              </tr>
+                              <tr>
+                                <td>20</td>
+                                <td>Math Mode</td>
+                                <td>0 (ADD)</td>
+                              </tr>
+                              <tr>
+                                <td>21</td>
+                                <td>Math Source A</td>
+                                <td>0 (CH0)</td>
+                              </tr>
+                              <tr>
+                                <td>22</td>
+                                <td>Math Source B</td>
+                                <td>1 (CH1)</td>
+                              </tr>
+                              <tr>
+                                <td>30</td>
+                                <td>CH0 Waveform Color</td>
+                                <td>0x3b</td>
+                              </tr>
+                              <tr>
+                                <td>31</td>
+                                <td>CH1 Waveform Color</td>
+                                <td>0xec</td>
+                              </tr>
+                              <tr>
+                                <td>32</td>
+                                <td>CH2 Waveform Color</td>
+                                <td>0x5c</td>
+                              </tr>
+                              <tr>
+                                <td>33</td>
+                                <td>CH3 Waveform Color</td>
+                                <td>0xc7</td>
+                              </tr>
+                              <tr>
+                                <td>34</td>
+                                <td>Math Waveform Color</td>
+                                <td>0xe0</td>
+                              </tr>
+
+                            </table>
+                    </p>
 
                     <h3 class="text-center">ADC Controller</h3>
                     <hr>
@@ -372,7 +528,7 @@ For our design, we chose to push as much of the oscilloscope functionality to th
         </div>
     </aside-->
 
-    <section class="bg-dark" id="software_design">
+    <section id="software_design">
         <div class="container">
             <div class="row">
                 <div class="col-lg-12 text-center">
@@ -393,7 +549,82 @@ For our design, we chose to push as much of the oscilloscope functionality to th
                     <p>
                         The shell component provided a simple command based interface for updating the oscilloscope configuration. Each command took some number of arguments, for example to specify the channel to modify and the new vertical scale in the “vscale” command. Each command handler took care of parsing and validating the values passed in, and then called into the scope component to update the configuration. Table 2 summarizes the commands which the shell made available.
                     </p>
-                    <p>TABLE 2</p>
+                    <p>
+                    <table style="width:100%">
+                          <tr>
+                            <th>Command</th>
+                            <th>Description</th>
+                          </tr>
+                          <tr>
+                            <td>num_chan [n] </td>
+                            <td>Sets the number of active channels</td>
+                          </tr>
+                          <tr>
+                            <td>timescale [n]</td>
+                            <td>Sets the horizontal timescale</td>
+                          </tr>
+                          <tr>
+                            <td>vscale [ch] [n]</td>
+                            <td>Sets the vertical scale for a channel</td>
+                          </tr>
+                          <tr>
+                            <td>offset [ch] [n]</td>
+                            <td>Sets the vertical offset for a channel</td>
+                          </tr>
+                          <tr>
+                            <td>trig_off</td>
+                            <td>Disables triggering</td>
+                          </tr>
+                          <tr>
+                            <td>trig_on</td>
+                            <td>Enables triggering</td>
+                          </tr>
+                          <tr>
+                            <td>trig_mode [n]</td>
+                            <td>Sets the triggering mode</td>
+                          </tr>
+                          <tr>
+                            <td>trig_chan [n]</td>
+                            <td>Sets the triggering channel</td>
+                          </tr>
+                          <tr>
+                            <td>trig_level [n]</td>
+                            <td>Sets the triggering threshold level</td>
+                          </tr>
+                          <tr>
+                            <td>trig_width [n]</td>
+                            <td>Sets the pulse triggering pulse width</td>
+                          </tr>
+                          <tr>
+                            <td>math_off</td>
+                            <td>Disables the math waveform</td>
+                          </tr>
+                          <tr>
+                            <td>math_on</td>
+                            <td>Enables the math waveform</td>
+                          </tr>
+                          <tr>
+                            <td>math_scale [n]</td>
+                            <td>Sets the math waveform vertical scale</td>
+                          </tr>
+                          <tr>
+                            <td>math_offset [n]</td>
+                            <td>Sets the math waveform vertical offset</td>
+                          </tr>
+                          <tr>
+                            <td>math_mode [n]</td>
+                            <td>Sets the math function</td>
+                          </tr>
+                          <tr>
+                            <td>math_ch0 [n]</td>
+                            <td>Sets the first source channel for the math waveform</td>
+                          </tr>
+                          <tr>
+                            <td>math_ch1 [n]</td>
+                            <td>Sets the second source channel for the math waveform</td>
+                          </tr>
+                    </table>
+                </p>
                     <p>
                         The surface component handled creating the rendering context used by the display component, and transferred pixels into the overlay buffer. We used the cairo graphics library to handle all rendering on the HPS. Cairo was used because it is a very well-optimized 2D rendering library, and its ARGB32 image surface type happens to store pixels in memory in the exact format used by the overlay framebuffer. Thus, the surface component simply initialized cairo, and used memcpy to transfer pixels from the image surface to the overlay framebuffer when refreshing the user interface.
                     </p>
