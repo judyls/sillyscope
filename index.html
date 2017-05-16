@@ -128,7 +128,7 @@
         </div>
         <div class="container">
             <div class="row">
-                <div class="col-lg-12 text-center">
+                <div class="col-lg-12 text-left">
                     <p>
                         The idea for this project came from two of the team members who had a lot of problems with an old oscilloscope. We decided to make our own oscilloscope just to see how good we can make it. The onboard ADC for DE1 only has 500ksps but we believed that was enough to test simple signals. We knew that it was not going to be close to the performance of professional oscilloscopes but it would be good for a final project.
                     </p>
@@ -198,11 +198,106 @@
         </div>
         <div class="container">
             <div class="row">
-                <div class="col-lg-12 text-center">
+                <div class="col-lg-12 text-left">
                     <p>
-                        For our design, we chose to push as much of the oscilloscope functionality to the FPGA as possible, with the HPS responsible for configuring the FPGA with the various oscilloscope parameters. All communication from the HPS to the FPGA was done using a simple interface we called the cfg bus. The cfg bus provides a simple write-only method for sending configuration from the HPS to the FPGA. The output of a single HPS-connected 32-bit Peripheral I/O (PIO) module is connected to every configurable module in our design. A number of configuration registers are connected to this bus, each with a register ID. When the upper 8 bits of the cfg bus signals match the register’s ID, the register then stores the lower 24 bits itself. Using this interface, the HPS pushes new settings to the FPGA when the user makes a change to the oscilloscope configuration. Table X provides a list of all configuration registers used in the design.
+For our design, we chose to push as much of the oscilloscope functionality to the FPGA as possible, with the HPS responsible for configuring the FPGA with the various oscilloscope parameters. All communication from the HPS to the FPGA was done using a simple interface we called the cfg bus. The cfg bus provides a simple write-only method for sending configuration from the HPS to the FPGA. The output of a single HPS-connected 32-bit Peripheral I/O (PIO) module is connected to every configurable module in our design. A number of configuration registers are connected to this bus, each with a register ID. When the upper 8 bits of the cfg bus signals match the register’s ID, the register then stores the lower 24 bits itself. Using this interface, the HPS pushes new settings to the FPGA when the user makes a change to the oscilloscope configuration. Table 1 provides a list of all configuration registers used in the design.
                     </p>
+                    <h1 class="text-center">TABLE 1</h1>
 
+                    <h3 class="text-center">ADC Controller</h3>
+                    <hr>
+                    <p>
+                        Initially we used the ADC controller provided by the Altera University Program IP. This was connected to the rest of our design over the Avalon-MM bus through the University Program provided External Bus to Avalon Bridge (EBAB). However, this controller had several shortcomings, the most important being that it’s sample rate was not near the ADC max sample rate of 500 KSPS and it was not configurable during runtime which channels were sampled. Because we needed both of these features, we decided to implement our own controller for the ADC.
+                    </p>
+                    <p>
+                        The onboard ADC is the LTC2308, which communicates over the SPI interface. The sequence of operations for a conversion is to pulse the conversion start line high to start the conversion, then the controller must wait for the conversion to occur. After the conversion time, the controller pulses the SCK line for twelve cycles and shifts in the 12 bits of data on the MISO line. The data on the MOSI line for the first 6 cycles of SCK setup the next ADC conversion. Since the maximum clock frequency of this interface is 40 MHz, but the controller is running on a 50 MHz clock, each SCK cycle consists of two cycles of the controller clock. This results in the controller only achieving a sample rate of 471 KSPS. It would be possible to run the control module on a different clock and refactor the module in order to raise this sample rate to the ADC max of 500 KSPS.
+                    </p>
+                    <p>
+                        The state machine for the ADC controller begins in the IDLE state at reset where all the outputs and states are reset back to their initial conditions. On the next cycle the FSM moves into the START state which is the only state where the CONVST pin on the ADC is high. The FSM uses a counter to remain in this state for two cycles to keep the CONVST pin high for long enough for the ADC to detect it and begin the conversion sequence. The counter then continues to increment while in the CONV state. The FSM stalls here until the counter reaches 80 to give the ADC enough time to complete the conversion.
+                    </p>
+                    <p>
+                        Once the counter reaches 80, it is reset back to zero and the controller starts the SPI transaction to read in the data. The FSM alternates between the SCK_L and SCK_H states which set the SCK line to either low or high, respectively. The counter is incremented whenever the FSM reaches the SCK_H state and the FSM exits this back and forth loop once the counter reaches 11, indicating 12 cycles of SCK have occurred.
+                    </p>
+                    <p>
+                        The input data is latched on the rising edge of the SCK line, so on each transition between SCK_L and SCK_H, the value on the MISO line is left shifted into the MISO value register. In order to setup the ADC, the correct bits must be set on the MOSI line. The value of the MOSI signal is updated on the transition from SCK_H to SCK_L to give an entire cycle of setup time before the ADC reads the value.
+                    </p>
+                    <p>
+                        Once the SPI transaction is complete, the FSM moves to the NXT_CH state, which handles sampling multiple channels. If the current channel being sampled is not equal to the number of channels active, the current channel is incremented and the FSM moves back to the START state to immediately start the next transaction. If the current channel is equal to the number of channels active, indicating all the channels have been sampled, the current channel is reset back to the first channel and the FSM moves into the WRITE state. In the process of updating the current channel, the MISO data for the next SPI transaction is set. Regardless of whether the FSM proceeds to the START or WRITE state, the 12 bits of data that was just read in from MOSI is set to the current channels data buffer.
+                    </p>
+                    <p>
+                        The WRITE state is responsible for passing the adc data to the rest of the design. If multiple channels are active, all of the channels are updated at the same time. Since there is a max of four channels, this corresponds to a 48 bit value. Because the sampling rate for the ADC should be constant, we do not want to let the FSM stall due to backpressure from later in the design. To accomplish this, the module simply copies the data from the active channel buffers to an output buffer and sets a valid flag in the one cycle it is in the WRITE state. This valid flag remains high until the rdy input is set, indicating that the value was consumed. This design keeps the ADC at a constant sample rate, but if the value is not consumed before the ADC has completed another conversion it is lost.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12">
+                    <img src="img/adc_fsm.png" style="padding-bottom:20px;" class="col-lg-8 col-lg-offset-2" alt="ADC FSM">
+                </div>
+            </div>
+            <div class="row text-center">
+                <p style="padding-bottom:50px;">Figure 2: FSM for ADC controller module</p>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12  text-left">
+                    <h3 class="text-center">Time Scaler</h3>
+                    <hr>
+                    <p>
+                        We used a simple scheme to adjust the sample rate when the user wanted to view signals that were too slow to be seen at the ADC’s maximum sample rate. Rather than have the ADC controller slow down its sample rate, we instead added a time scaler module which just dropped n samples out of every n+1 samples received from the ADC controller. The value of n was configurable through a configuration register, which allows the HPS to divide the effective sample rate by any integer. This division was accomplished by creating a counter which incremented every time the ADC controller produced a sample, and reset to zero when it reached n. The time scaler then only passed a sample through to the next stage when the counter equaled zero.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12  text-left">
+                    <h3 class="text-center">Trigger Module</h3>
+                    <hr>
+                    <p>
+                        The process of triggering traditionally consists of three steps, which are shown in three of the states of the trigger module FSM: ARMED, READY, and TRIGGERED. In the ARMED state, samples must be collected in order to have data points before the trigger point. Since the trigger point is set in the middle of the screen on our oscilloscope, this corresponds to 320 points. Once the buffer of 320 points has been filled, the FSM moves into the READY state. Here the module is looking for the trigger condition to be met to advance to the TRIGGERED state. The actual trigger detection is handled by the triggerer module. While waiting for the trigger condition, the samples to the left of the trigger point must be kept up to date. To handle this, the buffer from the READY state is treated as a circular buffer with a head and tail pointer that are updated with each new sample. When the trigger condition has been met, the samples to the right must be acquired. Another 320 samples are fed into this new right buffer.
+                    </p>
+                    <p>
+                        Now that the two buffers are filled, the data is ready to be passed out to the Sample Buffer SRAM where it can be read by the HPS and the VGA Writer. The FLUSH_LEFT and FLUSH_RIGHT states are responsible for writing the values from the left and right buffers into the SRAM over the Avalon-MM Bus. Once all of the 640 samples have been written into the Sample Buffer SRAM, the FSM moves into the SEND_REFRESH state to indicate to the VGA Writer that there is a new data in the buffer. The FSM waits for the ready signal from the VGA Writer to advance back to the ARMED state.
+                    </p>
+                    <p>
+                        The Trigger module is also responsible for the math channel. Based on the status of the config registers, the samples of any two channels can be added or subtracted to calculate the math channel samples. This operation occurs during the FLUSH states when the points are being written to the Sample Buffer SRAM.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12  text-left">
+                    <h3 class="text-center">Triggerer Module</h3>
+                    <hr>
+                    <p>
+                        The Triggerer Module is capable of detecting triggers based on edges and pulses. The five modes supported are Rising Edge, Falling Edge, Pulse Greater Than, Pulse Less Than, and Pulse Equal to. The HPS can set configuration registers to set which channel is sampled on, as well as the sample level and pulse width. Additionally, triggering can be disabled causing the module to always output a trigger signal.
+                    </p>
+                    <p>
+                        The first step in the triggering logic is to detect whether the selected input sample is greater than the trigger level. For the edge triggers, the previous value of this signal is stored. The rising edge trigger is then simply that the current sample is greater and the previous sample was not. The falling edge trigger is the reverse. While this trigger logic very simple, it works surprisingly well. Adding a small low pass filter to the sample input prior to comparing to the trigger level would increase reliability on noisy data near the trigger level.
+                    </p>
+                    <p>
+                        The pulse triggering logic detects the start of a pulse based on the sample greater than trigger level flag. Once the pulse has begun, a counter is incremented each cycle. If the sample greater than trigger level flag goes low, the counter is compared to the pulse length configuration to set the triggers for Pulse Greater Than, Pulse, Less Than, and Pulse Equal To. The counter is then reset and the logic is ready for the next pulse.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12  text-left">
+                    <h3 class="text-center">VGA Writer Module</h3>
+                    <hr>
+                    <p>
+                        The VGA writer was responsible for pulling data from the sample buffer, and writing that display into the VGA framebuffer. The VGA writer received a “go” signal from the trigger module, to indicate that new data was available and the screen should be redrawn. Additionally while drawing the screen, the VGA writer drew a grid in the background. The VGA writer had two main interfaces -- one to access the sample buffer, using an EBAB, and the other directly connected to the framebuffer SRAM. The was also an idle signal, used to prevent the trigger module from modifying the sample buffer in the middle of a screen draw, which would produce visible discontinuities in the output.
+                    </p>
                 </div>
             </div>
         </div>
@@ -217,7 +312,7 @@
         </div>
     </aside-->
 
-    <section class="bg-primary" id="software_design">
+    <section class="bg-dark" id="software_design">
         <div class="container">
             <div class="row">
                 <div class="col-lg-12 text-center">
@@ -228,9 +323,22 @@
         </div>
         <div class="container">
             <div class="row">
-                <div class="col-lg-12 text-center">
+                <div class="col-lg-12 text-left">
                     <p>
-                        DUMMY TEXT  cfg bus signals match the register’s ID, the register then stores the lower 24 bits itself. Using this interface, the HPS pushes new settings to the FPGA when the user makes a change to the oscilloscope configuration. Table X provides a list of all configuration registers used in the design.
+                        Our HPS program was responsible for configuring the various oscilloscope parameters in the FPGA, allowing the user to reconfigure the oscilloscope over the serial console, and displaying a user interface using the overlay framebuffer. The code was split up into a number of different components which handled those different tasks: the “scope” component maintained and synchronized the oscilloscope configuration with the FPGA, and reported the current configuration. The “shell” component handled the serial console, and passed configuration changes on to the scope component. The “surface” component was responsible for transferring pixels into the overlay buffer, and the “display” component was responsible for rendering the user interface itself.
+                    </p>
+                    <p>
+                        The scope component had a large number of functions for changing the configurable oscilloscope parameters, storing the current configuration, and reporting the current configuration. At startup, the oscilloscope configuration gets reset to a known state. Whenever a configuration change is requested, the change is passed on to the FPGA configuration bus, and the new state is stored for the display component to read later.
+                    </p>
+                    <p>
+                        The shell component provided a simple command based interface for updating the oscilloscope configuration. Each command took some number of arguments, for example to specify the channel to modify and the new vertical scale in the “vscale” command. Each command handler took care of parsing and validating the values passed in, and then called into the scope component to update the configuration. Table 2 summarizes the commands which the shell made available.
+                    </p>
+                    <p>TABLE 2</p>
+                    <p>
+                        The surface component handled creating the rendering context used by the display component, and transferred pixels into the overlay buffer. We used the cairo graphics library to handle all rendering on the HPS. Cairo was used because it is a very well-optimized 2D rendering library, and its ARGB32 image surface type happens to store pixels in memory in the exact format used by the overlay framebuffer. Thus, the surface component simply initialized cairo, and used memcpy to transfer pixels from the image surface to the overlay framebuffer when refreshing the user interface.
+                    </p>
+                    <p>
+                        The display component did all of the user interface rendering using cairo. The cairo context created by the surface component was drawn to for every UI element on the screen. We organized the UI into a series of hierarchical “panels”, where each panel had a background color, edge color, some number of child panels, and optionally a custom drawing function. For most of our UI components, the drawing function simply fetched some state from the scope component, and then drew some text in the panel using cairo. For most panels this was a fairly simple usage of cairo, though the “SillyScope” banner text took advantage of some of cairo’s more advanced features, using masks and color gradients to produce a moving rainbow effect.
                     </p>
 
                 </div>
