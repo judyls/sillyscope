@@ -67,6 +67,9 @@
                     <li>
                         <a class="page-scroll" href="#conclusion">Conclusion</a>
                     </li>
+                    <li>
+                        <a class="page-scroll" href="#appendix">Appendix</a>
+                    </li>
                     <!--li>
                         <a class="page-scroll" href="#contact">Contact</a>
                     </li-->
@@ -79,7 +82,9 @@
 
     <header>
         <div class="header-content">
-            <div class="header-content-inner">
+            <h1 style="font-size:100px;margin-top:-100px;" id="homeHeading">SillyScope</h1>
+            <hr>
+            <!--div class="header-content-inner">
                 <h1 id="homeHeading">Your Favorite Source of Free Bootstrap Themes</h1>
                 <hr>
                 <p>
@@ -87,7 +92,7 @@
                     framework! Just download your template and start going, no strings attached!
                 </p>
                 <a href="#about" class="btn btn-primary btn-xl page-scroll">Find Out More</a>
-            </div>
+            </div-->
         </div>
     </header>
 
@@ -125,33 +130,27 @@
             <div class="row">
                 <div class="col-lg-12 text-center">
                     <p>
-                        The idea for this project came from two of the team members who
-                    had a lot of problems with an old oscilloscope. We decided to make
-                    our own oscilloscope just to see how good we can make it. The
-                    onboard ADC for DE1 only has 500ksps but we believed that was enough
-                    to test simple signals. We knew that it was not going to be close to
-                    the performance of professional oscilloscopes but it would be good
-                    for a final project.
+                        The idea for this project came from two of the team members who had a lot of problems with an old oscilloscope. We decided to make our own oscilloscope just to see how good we can make it. The onboard ADC for DE1 only has 500ksps but we believed that was enough to test simple signals. We knew that it was not going to be close to the performance of professional oscilloscopes but it would be good for a final project.
                     </p>
 
                     <p>
-                        The high-level design overview can be seen in Figure X1.
-                        The input signal is sent directly to the ADC. The sample
+                        The high-level design overview can be seen in Figure 1. The 4 analog input signals are sent directly to the DE1-SoC’s ADC, an LT2308. The adc module interfaces with this ADC and fetches samples from the active channels at maximum speed. These samples are then sent to the time_scaler module, which discards samples such that a desired effective sample rate is achieved. These samples then flow into the trigger module, which maintains a circular buffer to store the 320 samples prior to a trigger event. These samples are also passed to the triggerer module, which identifies when a trigger event occurs. When a trigger occurs, the trigger module then stores the next 320 samples, to capture a 640 sample window surrounding a trigger event. These 640 samples are then written out to the sample buffer, and upon completion a screen redraw is requested from the vga_writer module. vga_writer then reads the sample buffer and draws the waveforms in the VGA framebuffer. At the same time, the HPS draws a user interface into the overlay framebuffer. The two framebuffers are then merged, and sent out to the screen.
                     </p>
+                    <p>
+                        The FPGA was used for sampling the signal, triggering and displaying the signal on VGA display. The HPS was responsible for configuring the FPGA with user specified parameters. We wanted the FPGA to perform almost all the computation for an oscilloscope. We left the user interactions to be handled by the HPS. User interactions are much easier to handle with the HPS and did not add much overhead to computation so it was beneficial to use software for it.
 
+                    </p>
                 </div>
             </div>
         </div>
         <div class="container">
             <div class="row">
                 <div class="col-lg-12">
-
-                        <img src="img/fpga_high_level.png" style="padding-bottom:20px;" class="col-lg-8 col-lg-offset-2" alt="High Level Design">
-
+                    <img src="img/fpga_high_level.png" style="padding-bottom:20px;" class="col-lg-8 col-lg-offset-2" alt="High Level Design">
                 </div>
             </div>
             <div class="row text-center">
-                <p style="padding-bottom:50px;">FigureXX</p>
+                <p style="padding-bottom:50px;">Figure 1: High-level design overview</p>
             </div>
         </div>
         <!--div class="container">
@@ -346,7 +345,7 @@
         </div>
     </section>
 
-    <section class="bg-primary" id="conclusion">
+    <section id="conclusion">
         <div class="container">
             <div class="row">
                 <div class="col-lg-12 text-center">
@@ -361,6 +360,25 @@
                     <p>
                         DUMMY TEXT  CONCLUSIONcfg bus signals match the register’s ID, the register then stores the lower 24 bits itself. Using this interface, the HPS pushes new settings to the FPGA when the user makes a change to the oscilloscope configuration. Table X provides a list of all configuration registers used in the design.
                     </p>
+
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="bg-dark" id="appendix">
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12 text-center">
+                    <h2 class="section-heading">Appendix</h2>
+                    <hr class="primary">
+                </div>
+            </div>
+        </div>
+        <div class="container">
+            <div class="row">
+                <div class="col-lg-12 text-center">
+                    <p>The group approves this report for inclusion on the course website.</p>
 
                 </div>
             </div>
